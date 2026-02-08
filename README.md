@@ -1,204 +1,157 @@
-1️⃣ API + Data Ingestion (Good, with one subtle issue)
-✅ What you did right
+🌾 AgroFinance: Agricultural Mandi Price Analysis
+📌 Project Overview
 
-Used requests properly
+AgroFinance is a data analytics project focused on analyzing agricultural mandi prices in India using real-time government data.
+The project demonstrates an end-to-end data pipeline — from API data extraction to visualization and SQL database storage.
 
-Parsed JSON safely
+The goal is to understand price variation across states, districts, markets, and commodities, and to build a reusable analytics workflow for agri-finance insights.
 
-Converted records → DataFrame
+🎯 Objectives
 
-Saved to CSV (good practice)
+Fetch live mandi price data from data.gov.in API
 
-Cleaned nulls & duplicates
+Clean and preprocess raw market data
 
-⚠️ Issue
+Perform exploratory data analysis (EDA)
 
-Your URL already contains:
+Visualize price trends and distributions
 
-format=xml
+Store processed data in SQL Server for future querying and dashboards
 
+🧰 Tech Stack
 
-but your params override it to:
+Python
 
-"format": "json"
+Pandas, NumPy
 
+Requests (API integration)
 
-Most APIs resolve this fine, but it’s sloppy.
+Matplotlib, Seaborn
 
-✅ Fix
+SQL Server
 
-Use only JSON, clean URL:
+SQLAlchemy & PyODBC
 
-url = "https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070"
+📥 Data Source
 
-2️⃣ Data Cleaning (Mostly correct, one bug)
-❌ IQR Outlier Bug
+Government of India – data.gov.in
 
-You wrote:
+Resource: Agricultural Produce Market Committee (APMC) mandi prices
 
-upper_limit = Q3 - 1.5*IQR
+Data includes:
 
+State
 
-This is wrong.
+District
 
-✅ Correct formula
-lower_limit = Q1 - 1.5 * IQR
-upper_limit = Q3 + 1.5 * IQR
+Market
 
+Commodity
 
-Right now, your outlier detection is underestimating upper outliers.
+Variety & Grade
 
-3️⃣ Visualization (Conceptually right, technically messy)
-⚠️ Barplot with too many categories
-sns.barplot(x=df['district'], y=df['max_price'])
+Arrival Date
 
+Minimum, Maximum & Modal Prices
 
-This works for small data, but:
+🔄 Project Workflow
+1️⃣ API Data Extraction
 
-Districts are categorical
+Used requests to fetch JSON data from the government API
 
-Barplot assumes aggregation
+Converted API response into a Pandas DataFrame
 
-Hard to read when categories increase
+Stored raw data locally as CSV for reproducibility
 
-✅ Better
-sns.barplot(data=df, x='district', y='max_price', estimator='mean')
-plt.xticks(rotation=45)
+2️⃣ Data Cleaning & Preprocessing
 
-❌ This line is logically wrong
-sns.lineplot(x=df['commodity'], y=df['min_price'])
+Removed missing values and duplicates
 
+Standardized column names
 
-commodity is categorical
+Converted price columns to numeric format
 
-Line plots imply ordered numeric/time series
+Parsed date fields into datetime objects
 
-✅ Better alternatives
-sns.boxplot(x='commodity', y='min_price', data=df)
+3️⃣ Exploratory Data Analysis (EDA)
 
+Price comparison across:
 
-or
+States
 
-sns.barplot(x='commodity', y='min_price', data=df, estimator='mean')
+Districts
 
-4️⃣ Price Cleaning (Very good 👏)
+Markets
 
-This is correct and professional:
+Commodities
 
-df['min_price'] = (
-    df['min_price']
-    .astype(str)
-    .str.replace(',', '', regex=False)
-    .str.replace('₹', '', regex=False)
-    .str.extract(r'(\d+)', expand=False)
-)
-df['min_price'] = pd.to_numeric(df['min_price'], errors='coerce')
+Visualizations used:
 
+Bar plots
 
-You handled:
+Line plots
 
-Currency symbols
+Histograms
 
-Commas
+Box plots
 
-Mixed data types
+Violin plots
 
-Many people mess this up — you didn’t.
+Cross-tab analysis between commodities and states
 
-5️⃣ Statistics Section (This is where it gets interesting)
-✅ Good
+4️⃣ Data Visualization
 
-Welch’s t-test (equal_var=False) ✔️
+Identified:
 
-Pairwise comparisons ✔️
+Markets with high price volatility
 
-Variance comparison using F-test ✔️
+State-wise commodity price differences
 
-❌ Major conceptual error (important)
+Distribution patterns of minimum and maximum prices
 
-This Z-test:
+5️⃣ SQL Database Integration
 
-z_stats = (Mean_of_Population - Std_of_Population) / (Std_of_Population/np.sqrt(len(df)))
+Connected to SQL Server using Windows Authentication
 
+Created a structured table for mandi prices
 
-This does not test anything meaningful.
+Inserted cleaned DataFrame into SQL database
 
-You’re subtracting:
+Enabled further querying and BI tool integration
 
-mean − standard deviation
+🗄️ Database Schema (Mandi Prices Table)
+Column Name	Description
+state	State name
+district	District name
+market	Market name
+commodity	Commodity name
+variety	Commodity variety
+grade	Quality grade
+arrival_date	Date of arrival
+min_price	Minimum price
+max_price	Maximum price
+modal_price	Modal (average) price
+📊 Key Insights
 
+Significant price variation exists across markets for the same commodity
 
-That has no statistical hypothesis.
+Certain states show consistently higher modal prices
 
-✅ Correct Z-test example
+Vegetables and spices exhibit higher volatility compared to grains
 
-If you wanted to test:
+Market-level analysis is more informative than state-level averages
 
-Is mean admissions ≠ μ₀ ?
+🚀 Future Enhancements
 
-mu_0 = 2000  # hypothetical mean
-z = (Mean_of_Population - mu_0) / (Std_of_Population / np.sqrt(len(df)))
-p = 2 * (1 - stats.norm.cdf(abs(z)))
+Add time-series forecasting for price prediction
 
+Integrate Power BI / Tableau dashboards
 
-⚠️ Right now, your conclusion:
+Automate daily API data ingestion
 
-“Since p-value is so low…”
+Add crop-wise and seasonal trend analysis
 
-is invalid for that test.
+👤 Author
 
-6️⃣ Machine Learning (Almost correct, one fatal bug)
-❌ MSE calculation error
-mse = mean_squared_error(X_test, pred)
-
-
-This compares:
-
-X_test ❌
-
-pred ❌
-
-✅ Correct
-mse = mean_squared_error(Y_test, pred)
-
-
-Otherwise, your model evaluation is wrong, even if code runs.
-
-7️⃣ SQL Server Integration (Excellent 💯)
-
-This part is industry-grade:
-
-Windows authentication ✔️
-
-Proper ODBC driver ✔️
-
-SQLAlchemy engine ✔️
-
-to_sql() usage ✔️
-
-Datetime conversion ✔️
-
-Only improvement:
-
-Use if_exists='append' once schema is stable
-
-Add primary key later
-
-8️⃣ Overall Verdict (Honest)
-🔥 Strengths
-
-You think end-to-end
-
-You don’t just “plot”, you analyze
-
-You understand statistics better than most beginners
-
-SQL + Python combo is strong
-
-⚠️ Weak spots to fix
-
-Statistical interpretation
-
-Choosing correct plots for data types
-
-Model evaluation discipline
+Mrudul Paku
+Aspiring Data Analyst | Python | SQL | Data Visualization
